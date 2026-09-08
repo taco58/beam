@@ -17,6 +17,7 @@ from rich.progress import (
                                                                                                                                                     
 from beam.tcp import send_file, recv_file                                                                                                         
 from beam.discovery import broadcast_beacon, listen_for_beacons
+from beam.web import serve_file_http
 
 console = Console()
 
@@ -124,17 +125,41 @@ def recv(dir: Path, port: int):
     "--to", "-t",                                                                                                                                 
     default=None,                                                                                                                                 
     help="Direct IP address of receiver (skips discovery).",                                                                                      
-)                                                                                                                                                 
+)                                                                                                                                              
 @click.option(                                                                                                                                    
     "--port", "-p",                                                                                                                               
     type=int,                                                                                                                                     
     default=9876,                                                                                                                                 
     help="Target port if using direct IP (default: 9876).",                                                                                       
-)                                                                                                                                                 
-def send(file_path: Path, to: Optional[str], port: int):                                                                                          
+)  
+@click.option(
+    "--web", "-w",
+    is_flag=True,
+    help="Share file via QR code for phones"
+)                                                                                                                                               
+def send(file_path: Path, to: Optional[str], port: int, web: bool):                                                                                          
     """Send a file to a nearby device over Wi-Fi.""" 
     file_size = file_path.stat().st_size                                                                                                          
-    formatted_size = format_size(file_size)                                                                                                       
+    formatted_size = format_size(file_size)    
+
+    
+    if web:
+        console.print("[bold cyan]📱 Mobile Beam Mode[/bold cyan]")
+        console.print("[dim]Scan the QR code with your phone camera (must be on the same Wi-Fi):[/dim]\n")
+
+        with make_progress_bar() as progress:
+            task = progress.add_task(f"Streaming {file_path.name}", total=file_size)
+
+            def on_progress(bytes_sent: int, total: int):
+                progress.update(task, completed=bytes_sent)
+
+            try:
+                url = serve_file_http(file_path, progress_callback=on_progress)
+                console.print(f"\n[dim]Direct link: {url}[/dim]")
+                console.print(f"[bold green]✔ Downloaded successfully to mobile device![/bold green]")
+            except Exception as err:
+                console.print(f"\n[bold red]❌ Web transfer error: {err}[/bold red]")
+        return                                                                                                   
                                                                                                                                                     
     console.print(f"[bold]Preparing to send:[/bold] [cyan]{file_path.name}[/cyan] ({formatted_size})\n")
 
@@ -176,7 +201,6 @@ def send(file_path: Path, to: Optional[str], port: int):
             console.print(f"\n[bold red]❌ Connection lost: {err}[/bold red]")
         except Exception as err:
             console.print(f"\n[bold red]❌ Error during transfer: {err}[/bold red]")
-
 
 
 def main():
