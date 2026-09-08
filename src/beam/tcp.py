@@ -11,6 +11,8 @@ from beam.protocol import (
     send_exact
 )
 
+from beam.utils import get_unique_path
+
 
 def hash_file(file_path: Path) -> Tuple[int, str]:
     hasher = hashlib.sha256()
@@ -90,7 +92,7 @@ def recv_file(save_dir: Path, port: int = 0, confirm_callback: Optional[Callable
         metadata = recv_json(client_sock)
 
         safe_filename = Path(metadata["filename"]).name
-        save_path = save_dir / safe_filename
+        save_path = get_unique_path(save_dir, safe_filename)
 
         accepted = True
 
@@ -103,7 +105,10 @@ def recv_file(save_dir: Path, port: int = 0, confirm_callback: Optional[Callable
 
         send_json(client_sock, {"accepted": True})
 
-        with open(save_path, "wb") as f:
+        part_path = save_dir / f".{save_path.name}.beam.part"
+
+
+        with open(part_path, "wb") as f:
             bytes_received = 0
 
             while bytes_received != metadata["size"]:
@@ -117,8 +122,12 @@ def recv_file(save_dir: Path, port: int = 0, confirm_callback: Optional[Callable
                     progress_callback(bytes_received, metadata["size"])
 
             if not hasher.hexdigest() == metadata["sha256"]:
-                save_path.unlink()
+                if part_path.exists():
+                    part_path.unlink()
                 raise ValueError("SHA-256 mismatch: file corrupted")
+
+            part_path.replace(save_path)
+
     finally:
         server_sock.close()
         client_sock.close()

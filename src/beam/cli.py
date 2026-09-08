@@ -42,7 +42,7 @@ def make_progress_bar() -> Progress:
 
 @click.group()
 def cli():
-    """beam - Zero-confid peer-to-peer file transfer"""
+    """beam - Zero-config peer-to-peer file transfer"""
     pass
 
 @cli.command()
